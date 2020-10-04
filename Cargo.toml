@@ -1,0 +1,21 @@
+[package]
+name = "poorch"
+version = "0.1.0"
+authors = ["dmyaro <yaroslavdmytrenko@planeks.net>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-web = "3"
+actix-rt = "1.1.1"
+chrono = "0.4.18"
+sqlx = { version = "0.4.0-beta.1", features = [ "postgres", "chrono" ] }
+listenfd = "0.3.3"
+serde = "1.0.116"
+serde_json = "1.0.57"
+dotenv = "0.15.0"
+env_logger = "0.7.1"
+log = "0.4.8"
+anyhow = "1.0.28"
+futures = "0.3.5"
