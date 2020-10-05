@@ -5,18 +5,15 @@ use sqlx::{postgres::{PgPoolOptions, PgRow}, query_as};
 use sqlx::query::Query;
 use sqlx::{FromRow, Row, Pool, Postgres};
 use anyhow::Result;
-use sqlx::types::chrono::{DateTime, Utc};
 use crate::utils::get_unix_timestamp_ms;
-// use utils::get_unix_timestamp_ms;
 
 // for user input
 #[derive(Deserialize, Serialize)]
 pub struct PostRequest {
-    // pub id: i32,
     pub is_oppost: bool,
     pub subject: Option<String>,
     pub body: Option<String>,
-    // pub created_at: String
+    pub board_id: i32
 }
 
 // db representation
@@ -26,7 +23,8 @@ pub struct Post {
     pub is_oppost: bool,
     pub subject: Option<String>,
     pub body: Option<String>,
-    pub created_at: i64
+    pub created_at: i64,
+    pub board_id: i32
 } 
 
 // implementation of Responder for Post to return Post from action handler
@@ -53,7 +51,7 @@ impl Post {
                 id, is_oppost, subject, body, subject, body, created_at
                 FROM posts
                 WHERE (is_oppost = TRUE)
-                ORDER BY id;
+                ORDER BY created_at;
             "#
         ).fetch_all(pool).await?;
 
@@ -64,7 +62,8 @@ impl Post {
                 is_oppost: record.is_oppost,
                 body: Some(record.body.unwrap()),
                 subject: Some(record.subject.unwrap()),
-                created_at: record.created_at
+                created_at: record.created_at,
+                board_id: record.board_id
             });
         }
 
@@ -75,7 +74,7 @@ impl Post {
         let mut tx = pool.begin().await?; // transaction
         let post = sqlx::query_as::<_, Post>(
             r#"
-                SELECT id, is_oppost, subject, body, subject, body, created_at
+                SELECT id, is_oppost, subject, body, subject, body, created_at, board_id
                 FROM posts
                 WHERE (id = $1);
             "#
@@ -85,29 +84,35 @@ impl Post {
 
     }
 
+    pub async fn find_by_board_id(pool: &Pool<Postgres>, board_id: i32) -> Result<Post, sqlx::Error> {
+        let mut tx = pool.begin().await?;
+        let post = sqlx::query_as::<_, Post>(
+            r#"
+                SELECT id, is_oppost, subject, body, subject, body, created_at, board_id
+                FROM posts
+                WHERE (board_id = $1);
+            "#
+        ).bind(&board_id).fetch_one(&mut tx).await?;
+
+        Ok(post)
+
+    }
+
     pub async fn create(pool: &Pool<Postgres>, post: PostRequest) -> Result<Post> {
         let mut tx = pool.begin().await?; // transaction
         let post = sqlx::query_as::<_, Post>(
             r#"INSERT INTO posts
-            (is_oppost, subject, body, created_at)
+            (is_oppost, subject, body, created_at, board_id)
             VALUES
-            ($1, $2, $3, $4)
-            RETURNING id, is_oppost, subject, body, created_at
+            ($1, $2, $3, $4, $5)
+            RETURNING id, is_oppost, subject, body, created_at, board_id
             "#
         )
             .bind(post.is_oppost)
             .bind(&post.subject.unwrap())
             .bind(&post.body.unwrap())
             .bind(&get_unix_timestamp_ms())
-            // .map(|row: PgRow| {
-            //     Post {
-            //         id: row.get(0),
-            //         is_oppost: row.get(1),
-            //         subject: row.get(2),
-            //         body: row.get(3),
-            //         created_at: row.get(4)
-            //     }
-            // })
+            .bind(&post.board_id)
             .fetch_one(&mut tx)
             .await?;
 

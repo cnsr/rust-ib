@@ -19,5 +19,7 @@ sqlx migrate run
 cargo run
 ```
 
+If you have `make` isntalled, use `make run` to run dev server. Hot reload included.
+
 Not sure how to compile just yet, it likely wont even run either way lol.
 No tests just yet. Not sure if ever will be.

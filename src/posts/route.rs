@@ -1,5 +1,4 @@
 use actix_web::{delete, get, post, put, web, HttpResponse, Responder};
-use serde_json::json;
 use sqlx::{Postgres, Pool, Error};
 use crate::posts::model::{Post, PostRequest};
 
