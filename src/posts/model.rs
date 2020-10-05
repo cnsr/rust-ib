@@ -84,17 +84,28 @@ impl Post {
 
     }
 
-    pub async fn find_by_board_id(pool: &Pool<Postgres>, board_id: i32) -> Result<Post, sqlx::Error> {
-        let mut tx = pool.begin().await?;
-        let post = sqlx::query_as::<_, Post>(
+    pub async fn find_opposts_by_board_id(pool: &Pool<Postgres>, board_id: i32) -> Result<Vec<Post>, sqlx::Error> {
+        let mut posts: Vec<Post> = vec![];
+        let records = sqlx::query_as::<_, Post>(
             r#"
                 SELECT id, is_oppost, subject, body, subject, body, created_at, board_id
                 FROM posts
-                WHERE (board_id = $1);
+                WHERE (board_id = $1, oppost = TRUE);
             "#
-        ).bind(&board_id).fetch_one(&mut tx).await?;
+        ).bind(&board_id).fetch_all(pool).await?;
 
-        Ok(post)
+        for record in records {
+            posts.push(Post {
+                id: record.id,
+                is_oppost: record.is_oppost,
+                body: Some(record.body.unwrap()),
+                subject: Some(record.subject.unwrap()),
+                created_at: record.created_at,
+                board_id: record.board_id
+            });
+        }
+
+        Ok(posts)
 
     }
 

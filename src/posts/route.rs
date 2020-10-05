@@ -21,6 +21,15 @@ async fn get_post_by_id(db_pool: web::Data<Pool<Postgres>>, id: web::Path<i32>) 
     }
 }
 
+#[get("/posts/board/{id}")]
+async fn get_opposts_by_board_id(db_pool: web::Data<Pool<Postgres>>, id: web::Path<i32>) -> impl Responder {
+    let result = Post::find_opposts_by_board_id(db_pool.get_ref(), id.into_inner()).await;
+    match result {
+        Ok(posts) => HttpResponse::Ok().json(posts),
+        _ => HttpResponse::BadRequest().body("Bad request.")
+    }
+}
+
 #[post("/posts/add")]
 async fn create_post(db_pool: web::Data<Pool<Postgres>>, post: web::Json<PostRequest>) -> impl Responder {
     let result = Post::create(db_pool.get_ref(), post.into_inner()).await;
