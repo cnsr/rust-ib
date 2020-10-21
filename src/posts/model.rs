@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
 use actix_web::{HttpResponse, HttpRequest, Responder, Error};
 use futures::future::{ready, Ready};
-use sqlx::{postgres::{PgPoolOptions, PgRow}, query_as};
+use sqlx::{postgres::{PgPoolOptions, PgRow, PgDone}, query_as};
 use sqlx::query::Query;
-use sqlx::{FromRow, Row, Pool, Postgres};
+use sqlx::{FromRow, Row, Pool, Postgres, query};
 use anyhow::Result;
 use crate::utils::get_unix_timestamp_ms;
+
+const MAX_POSTS_IN_TREAD: i64 = 50; // TODO: fetch from board we are currently using
 
 // for user input
 #[derive(Deserialize, Serialize)]
@@ -16,14 +18,16 @@ pub struct PostRequest {
 }
 
 // db representation
-#[derive(Serialize, FromRow)]
+#[derive(Serialize, FromRow, Clone)]
 pub struct Post {
     pub id: i32,
     pub is_oppost: bool,
     pub subject: Option<String>,
     pub body: Option<String>,
     pub created_at: i64,
-    pub board_id: i32
+    pub board_id: i32,
+    pub oppost_id: Option<i32>,
+    pub is_locked: bool,
 } 
 
 // implementation of Responder for Post to return Post from action handler
@@ -62,7 +66,9 @@ impl Post {
                 body: Some(record.body.unwrap()),
                 subject: Some(record.subject.unwrap()),
                 created_at: record.created_at,
-                board_id: record.board_id
+                board_id: record.board_id,
+                oppost_id: None,
+                is_locked: record.is_locked,
             });
         }
 
@@ -73,7 +79,7 @@ impl Post {
         let mut tx = pool.begin().await?; // transaction
         let post = sqlx::query_as::<_, Post>(
             r#"
-                SELECT id, is_oppost, subject, body, subject, body, created_at, board_id
+                SELECT id, is_oppost, subject, body, subject, body, created_at, board_id, is_locked
                 FROM posts
                 WHERE (id = $1);
             "#
@@ -83,14 +89,25 @@ impl Post {
 
     }
 
+    // get number of posts in a thread
+    pub async fn count_by_oppost_id(post: Self, pool: &Pool<Postgres>) -> Result<i64, sqlx::Error> {
+        let oppost_id: i32 = if post.is_oppost {post.id} else {post.oppost_id.unwrap()};
+        let count = sqlx::query!(
+            "SELECT COUNT(*) as count FROM posts WHERE (oppost_id = $1);", oppost_id
+        ).fetch_all(pool).await?;
+
+        // holy fuck wtf is this
+        Ok(count[0].count.unwrap())
+    }
+
     pub async fn find_by_oppost_id(pool: &Pool<Postgres>, oppost_id: i32) -> Result<Vec<Post>, sqlx::Error> {
         let mut posts: Vec<Post> = vec![];
         let records = query_as::<_, Post>(
             r#"
-                SELECT id, is_oppost, subject, body, subject, body, created_at
+                SELECT id, is_oppost, subject, body, subject, body, created_at, is_locked
                 FROM posts WHERE (id = $1)
                 UNION
-                SELECT id, is_oppost, subject, body, subject, body, created_at
+                SELECT id, is_oppost, subject, body, subject, body, created_at, FALSE as is_locked
                 FROM posts WHERE (oppost_id = $1)
                 ORDER BY created_at;
             "#
@@ -104,7 +121,9 @@ impl Post {
                 body: Some(record.body.unwrap()),
                 subject: Some(record.subject.unwrap()),
                 created_at: record.created_at,
-                board_id: record.board_id
+                board_id: record.board_id,
+                oppost_id: Some(oppost_id),
+                is_locked: record.is_locked,
             });
         }
 
@@ -115,7 +134,7 @@ impl Post {
         let mut posts: Vec<Post> = vec![];
         let records = sqlx::query_as::<_, Post>(
             r#"
-                SELECT id, is_oppost, subject, body, subject, body, created_at, board_id
+                SELECT id, is_oppost, subject, body, subject, body, created_at, board_id, is_locked
                 FROM posts
                 WHERE (board_id = $1, oppost = TRUE);
             "#
@@ -128,7 +147,9 @@ impl Post {
                 body: Some(record.body.unwrap()),
                 subject: Some(record.subject.unwrap()),
                 created_at: record.created_at,
-                board_id: record.board_id
+                board_id: record.board_id,
+                oppost_id: None,
+                is_locked: record.is_locked
             });
         }
 
@@ -181,4 +202,27 @@ impl Post {
         tx.commit().await?;
         Ok(result)
     }
+
+    // check if thread should be locked and lock it if necessary
+    pub async fn verify_thread(post: Self, pool: &Pool<Postgres>) -> Result<bool, sqlx::Error> {
+        let oppost_id: i32 = if post.is_oppost {post.id} else {post.oppost_id.unwrap()};
+        let posts_in_thread = Post::count_by_oppost_id(post, pool).await?;
+        if posts_in_thread >= MAX_POSTS_IN_TREAD {
+            Post::lock_thread(oppost_id.into(), pool).await?;
+            return Ok(true)
+        }
+        Ok(true)
+    }
+
+    pub async fn lock_thread(oppost_id: i64, pool: &Pool<Postgres>) -> sqlx::Result<PgDone> {
+        let mut tx = pool.begin().await.unwrap(); // transaction
+        sqlx::query!(
+            r#"
+                UPDATE posts
+                SET is_locked = TRUE
+                WHERE (oppost_id = $1);
+            "#, oppost_id as i32
+        ).execute(&mut tx).await //fetch_one(&mut tx).await?;
+    }
+
 }
