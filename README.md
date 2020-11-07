@@ -19,6 +19,11 @@ sqlx migrate run
 cargo run
 ```
 
+If the `cargo install` command fails, use the following one:
+```sh
+cargo install --version=0.1.0-beta.1 sqlx-cli --no-default-features --features postgres
+```
+
 If you have `make` isntalled, use `make run` to run dev server. Hot reload included.
 
 Not sure how to compile just yet, it likely wont even run either way lol.
