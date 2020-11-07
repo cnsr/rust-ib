@@ -7,7 +7,7 @@ use anyhow::Result;
 
 use crate::utils::get_unix_timestamp_ms;
 
-#[derive(Deserialize, Serializer)]
+#[derive(Deserialize, Serialize)]
 pub struct BoardRequest {
     short: String,
     long: String,
@@ -15,14 +15,15 @@ pub struct BoardRequest {
     is_hidden: bool
 }
 
-#[derive(FromRow, Serializer)]
+#[derive(FromRow, Serialize)]
 pub struct Board {
     board_id: i32,
     short: String,
     long: String,
     description: Option<String>,
     created_at: i64,
-    is_hidden: bool
+    is_hidden: bool,
+    max_posts: i32,
 }
 
 impl Responder for Board {
@@ -58,7 +59,8 @@ impl Board {
                 long: record.long,
                 description: Some(record.description.unwrap()),
                 created_at: record.created_at,
-                is_hidden: record.is_hidden
+                is_hidden: record.is_hidden,
+                max_posts: record.max_posts
             });
         }
 
@@ -70,7 +72,7 @@ impl Board {
         let records = query_as::<_, Board>(
             r#"
             SELECT
-                board_id, short, long, description, created_at, is_hidden
+                board_id, short, long, description, created_at, is_hidden, max_posts
                 FROM posts
                 WHERE (is_hidden = FALSE)
                 ORDER BY created_at;
@@ -84,7 +86,8 @@ impl Board {
                 long: record.long,
                 description: Some(record.description.unwrap()),
                 created_at: record.created_at,
-                is_hidden: record.is_hidden
+                is_hidden: record.is_hidden,
+                max_posts: record.max_posts,
             });
         }
 
@@ -95,11 +98,28 @@ impl Board {
         let mut tx = pool.begin().await?; // transaction
         let board = sqlx::query_as::<_, Board>(
             r#"
-                board_id, short, long, description, created_at, is_hidden
+                board_id, short, long, description, created_at, is_hidden, max_posts
                 FROM posts
                 WHERE (short = $1);
             "#
         ).bind(&short).fetch_one(&mut tx).await?;
         Ok(board)
+    }
+
+    pub async fn find_by_id(pool: &Pool<Postgres>, board_id: i64) -> Result<Board, sqlx::Error> {
+        let mut tx = pool.begin().await?; // transaction
+        let board = sqlx::query_as::<_, Board>(
+            r#"
+                board_id, short, long, description, created_at, is_hidden, max_posts
+                FROM posts
+                WHERE (board_id = $1);
+            "#
+        ).bind(&board_id).fetch_one(&mut tx).await?;
+        Ok(board)
+    }
+
+    pub async fn max_posts(pool: &Pool<Postgres>, board_id: i64) -> Result<i64, sqlx::Error> { 
+        let board = Self::find_by_id(pool, board_id).await?;
+        return Ok(board.max_posts.into())
     }
 }

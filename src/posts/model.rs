@@ -1,3 +1,4 @@
+use crate::boards::Board;
 use serde::{Deserialize, Serialize};
 use actix_web::{HttpResponse, HttpRequest, Responder, Error};
 use futures::future::{ready, Ready};
@@ -7,7 +8,6 @@ use sqlx::{FromRow, Row, Pool, Postgres, query};
 use anyhow::Result;
 use crate::utils::get_unix_timestamp_ms;
 
-const MAX_POSTS_IN_TREAD: i64 = 50; // TODO: fetch from board we are currently using
 
 // for user input
 #[derive(Deserialize, Serialize)]
@@ -200,14 +200,19 @@ impl Post {
         
 
         tx.commit().await?;
+        // run verification on whether the thread should be locked
+        Self::verify_thread(result.clone(), pool).await?;
         Ok(result)
     }
 
     // check if thread should be locked and lock it if necessary
+    // this is probably shit that should be rewritten
     pub async fn verify_thread(post: Self, pool: &Pool<Postgres>) -> Result<bool, sqlx::Error> {
+        let copied_post = post.clone();
         let oppost_id: i32 = if post.is_oppost {post.id} else {post.oppost_id.unwrap()};
-        let posts_in_thread = Post::count_by_oppost_id(post, pool).await?;
-        if posts_in_thread >= MAX_POSTS_IN_TREAD {
+        let posts_in_thread: i64 = Post::count_by_oppost_id(post, pool).await?;
+        let max_posts = Board::max_posts(pool, copied_post.board_id as i64).await?;
+        if posts_in_thread >= max_posts {
             Post::lock_thread(oppost_id.into(), pool).await?;
             return Ok(true)
         }

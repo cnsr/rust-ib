@@ -11,6 +11,7 @@ use anyhow::Result;
 
 // modules
 mod posts;
+mod boards;
 mod utils;
 
 
@@ -29,6 +30,7 @@ async fn main() -> Result<()> {
         App::new()
             .data(db_pool.clone()) // pass database pool to application so we can access it inside handlers
             .configure(posts::init_routes) // init posts routes
+            .configure(boards::init_routes) // init boards routes
     });
 
     server = match listenfd.take_tcp_listener(0)? {
