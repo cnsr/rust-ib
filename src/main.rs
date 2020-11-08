@@ -9,6 +9,10 @@ use actix_web::{web, guard,  App, HttpResponse, HttpServer, Responder};
 use sqlx::{migrate, Pool, Postgres, postgres::PgPoolOptions, migrate::Migrator};
 use anyhow::Result;
 
+// macro cargo dependencies
+#[macro_use]
+extern crate lazy_static;
+
 // modules
 mod posts;
 mod boards;
