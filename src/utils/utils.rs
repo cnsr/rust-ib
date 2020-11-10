@@ -1,5 +1,8 @@
 use sqlx::types::chrono::Utc;
 use regex::Regex;
+use std::io::{Error, ErrorKind};
+use dotenv::dotenv;
+use std::env;
 
 pub fn get_unix_timestamp_ms() -> i64 {
     let now = Utc::now();
@@ -32,5 +35,18 @@ pub async fn parse_text(text: Option<String>) -> Option<Vec<i32>> {
             }
         },
         None => {None}
+    }
+}
+
+
+pub fn validate_credentials(admin_password: &str) -> Result<bool, Error> {
+    dotenv().ok();
+    let password = env::var("ADMIN_PASSWORD")
+        .expect("ADMIN_PASSWORD is not set in .env file");
+
+    if admin_password.eq(Box::leak(password.into_boxed_str())) {
+        return Ok(true);
+    } else {
+        return Err(Error::new(ErrorKind::Other, "Authentication failed."))
     }
 }
