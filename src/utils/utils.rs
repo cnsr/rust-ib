@@ -18,7 +18,9 @@ pub async fn parse_text(text: Option<String>) -> Option<Vec<i32>> {
 
     match text {
         Some(text) => {
-            let static_text = Box::leak(text.into_boxed_str());
+            // wtf tbh
+            let mut text2 = text;
+            let static_text = text2.as_mut_str();
 
             // only `number` capture group is needed
             let maybe_replies: Result<Vec<i32>, _> = RE_REPLY.captures_iter(static_text)

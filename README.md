@@ -1,6 +1,7 @@
 ### ABOUT
 
-Not much, hbu?
+Half-assed imageboard backend, written in Rust, currently with 0.5 features and 0 documentation.
+There will be something like that in the future, but right now I am too busy with work to even consistently code this pet project of mine.
 
 ### INSTALLATION
 
