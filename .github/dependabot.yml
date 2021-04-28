@@ -1,0 +1,15 @@
+version: 2
+updates:
+- package-ecosystem: cargo
+  directory: "/"
+  schedule:
+    interval: daily
+    time: "15:00"
+    timezone: Europe/Kiev
+  ignore:
+  - dependency-name: actix-rt
+    versions:
+    - 2.1.0
+  - dependency-name: sqlx
+    versions:
+    - 0.5.1
